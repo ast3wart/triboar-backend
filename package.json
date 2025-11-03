@@ -1,0 +1,51 @@
+{
+  "name": "triboar-guild-backend",
+  "version": "1.0.0",
+  "description": "Triboar Guild - Stripe Subscription + Discord Role Automation Backend",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "migrate:undo": "node src/db/migrate.js --undo",
+    "seed": "node src/db/seed.js",
+    "test": "NODE_ENV=test jest --detectOpenHandles",
+    "test:e2e": "NODE_ENV=test jest --testPathPattern=e2e",
+    "test:unit": "NODE_ENV=test jest --testPathPattern=unit",
+    "lint": "eslint src/**/*.js"
+  },
+  "keywords": [
+    "stripe",
+    "discord",
+    "subscriptions",
+    "automation"
+  ],
+  "author": "Triboar Guild",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "bull": "^4.11.5",
+    "cors": "^2.8.5",
+    "discord.js": "^14.14.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.11.3",
+    "pino": "^10.1.0",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^10.3.1",
+    "redis": "^4.6.12",
+    "stripe": "^14.10.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  }
+}
