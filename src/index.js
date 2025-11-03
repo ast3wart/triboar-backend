@@ -10,6 +10,22 @@ import logger from './utils/logger.js';
 import { errorHandler, asyncHandler } from './api/middleware/errorHandler.js';
 import * as syncService from './services/syncService.js';
 
+// Validate BACKEND_API_TOKEN is set on startup
+const BACKEND_API_TOKEN = process.env.BACKEND_API_TOKEN;
+if (!BACKEND_API_TOKEN) {
+  const errorMsg = 'CRITICAL: BACKEND_API_TOKEN environment variable is required but not set. Application cannot start without it.';
+  logger.error(errorMsg);
+  console.error(errorMsg);
+  process.exit(1);
+}
+
+if (BACKEND_API_TOKEN.length < 32) {
+  const errorMsg = 'CRITICAL: BACKEND_API_TOKEN must be at least 32 characters long. Current length: ' + BACKEND_API_TOKEN.length;
+  logger.error(errorMsg);
+  console.error(errorMsg);
+  process.exit(1);
+}
+
 // Routes
 import authRoutes from './api/routes/auth.js';
 import checkoutRoutes from './api/routes/checkout.js';

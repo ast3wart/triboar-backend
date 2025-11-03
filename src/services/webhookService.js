@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import { query } from '../db/connection.js';
 
 const ROLEBOT_URL = process.env.ROLEBOT_WEBHOOK_URL || 'http://localhost:3001/webhooks/rolebot';
+const BACKEND_API_TOKEN = process.env.BACKEND_API_TOKEN;
 
 /**
  * Send webhook event to RoleBot
@@ -17,6 +18,9 @@ export const sendWebhook = async (eventType, data) => {
 
     const response = await axios.post(ROLEBOT_URL, payload, {
       timeout: 5000,
+      headers: {
+        'Authorization': `Bearer ${BACKEND_API_TOKEN}`,
+      },
     });
 
     logger.info({ eventType, discordId: data.discordId }, 'Webhook sent to RoleBot');
