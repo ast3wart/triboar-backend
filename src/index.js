@@ -36,10 +36,6 @@ app.use(morgan('combined', {
   },
 }));
 
-// Body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 // ===== Routes =====
 
 // Health check
@@ -47,10 +43,16 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Stripe webhooks must be registered BEFORE json() middleware to receive raw body for signature verification
+app.use('/webhooks', webhookRoutes);
+
+// Body parsing (for all other routes)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/checkout', checkoutRoutes);
-app.use('/webhooks', webhookRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/lists', listsRoutes);
 
