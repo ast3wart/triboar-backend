@@ -136,18 +136,19 @@ export const getSubscriptionByStripeId = async (stripeSubscriptionId) => {
 
 export const handleSubscriptionActive = async (stripeSubscription) => {
   try {
-    const subscription = await createOrUpdateSubscription(null, stripeSubscription);
-
-    // Get user from subscription
+    // Get user by stripe_customer_id first
     const userResult = await query(
-      'SELECT u.* FROM users u JOIN subscriptions s ON u.id = s.user_id WHERE s.stripe_subscription_id = $1',
-      [stripeSubscription.id]
+      'SELECT * FROM users WHERE stripe_customer_id = $1',
+      [stripeSubscription.customer]
     );
 
     const user = userResult.rows[0];
     if (!user) {
-      throw new Error('User not found for subscription');
+      throw new Error('User not found for Stripe customer');
     }
+
+    // Now create/update subscription with correct userId
+    const subscription = await createOrUpdateSubscription(user.id, stripeSubscription);
 
     // Update user tier
     await query(
