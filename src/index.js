@@ -13,6 +13,7 @@ import authRoutes from './api/routes/auth.js';
 import checkoutRoutes from './api/routes/checkout.js';
 import webhookRoutes from './api/routes/webhooks.js';
 import adminRoutes from './api/routes/admin.js';
+import listsRoutes from './api/routes/lists.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/lists', listsRoutes);
 
 // ===== Error Handling =====
 
