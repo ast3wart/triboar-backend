@@ -202,7 +202,7 @@ router.post('/reconcile', asyncHandler(async (req, res) => {
 
     // Get subscription
     const subResult = await query(
-      'SELECT * FROM subscriptions WHERE user_id = $1 AND status IN ($1, $2)',
+      'SELECT * FROM subscriptions WHERE user_id = $1 AND status IN ($2, $3)',
       [user.id, 'active', 'trialing']
     );
 
