@@ -27,7 +27,7 @@ export const performDailySync = async () => {
 
     for (const user of expiredResult.rows) {
       try {
-        await gracePeriodService.startGracePeriod(user.id, user.discord_id);
+        await gracePeriodService.moveToGracePeriod(user.id, user.discord_id);
         logger.info({ userId: user.id, discordId: user.discord_id }, 'Moved user to grace period during sync');
       } catch (err) {
         logger.error({ err, userId: user.id }, 'Failed to move user to grace period');
