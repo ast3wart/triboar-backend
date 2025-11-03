@@ -4,9 +4,11 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cron from 'node-cron';
 import { initDB } from './db/connection.js';
 import logger from './utils/logger.js';
 import { errorHandler, asyncHandler } from './api/middleware/errorHandler.js';
+import * as syncService from './services/syncService.js';
 
 // Routes
 import authRoutes from './api/routes/auth.js';
@@ -75,12 +77,22 @@ const startServer = async () => {
     await initDB();
     logger.info('Database initialized');
 
+    // Schedule daily sync at 11:59 PM (23:59)
+    cron.schedule('59 23 * * *', () => {
+      logger.info('Running scheduled daily sync');
+      syncService.performDailySync().catch(err => {
+        logger.error({ err }, 'Scheduled daily sync failed');
+      });
+    });
+    logger.info('Daily sync scheduled for 11:59 PM');
+
     // Start server
     app.listen(PORT, () => {
       logger.info({ port: PORT }, 'Server started');
       console.log(`\n✓ Server running at http://localhost:${PORT}`);
       console.log(`✓ Health check: GET http://localhost:${PORT}/health`);
       console.log(`✓ Discord OAuth: GET http://localhost:${PORT}/api/auth/discord`);
+      console.log(`✓ Daily sync scheduled for 11:59 PM`);
     });
   } catch (err) {
     logger.error({ err }, 'Failed to start server');
