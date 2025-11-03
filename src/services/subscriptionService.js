@@ -1,6 +1,5 @@
 import logger from '../utils/logger.js';
 import { query } from '../db/connection.js';
-import * as discordRoleService from './discordRoleService.js';
 import * as auditLogService from './auditLogService.js';
 import * as gracePeriodService from './gracePeriodService.js';
 import * as webhookService from './webhookService.js';
@@ -156,14 +155,7 @@ export const handleSubscriptionActive = async (stripeSubscription) => {
       ['paid', user.id]
     );
 
-    // Add paid role to Discord
-    try {
-      await discordRoleService.syncRoles(user.discord_id, true);
-    } catch (err) {
-      logger.error({ err, discordId: user.discord_id }, 'Failed to sync Discord roles');
-      // Continue even if Discord role sync fails
-    }
-
+    // RoleBot will handle role assignment via webhook (subscription renewal triggers sync)
     // Remove from grace period if they were in it (they renewed)
     try {
       await gracePeriodService.removeFromGracePeriod(user.id, user.discord_id);

@@ -1,7 +1,6 @@
 import express from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAdmin } from '../middleware/auth.js';
-import * as discordRoleService from '../../services/discordRoleService.js';
 import * as auditLogService from '../../services/auditLogService.js';
 import * as gracePeriodService from '../../services/gracePeriodService.js';
 import * as webhookService from '../../services/webhookService.js';
@@ -102,12 +101,7 @@ router.post('/roles/grant', asyncHandler(async (req, res) => {
   }
 
   try {
-    await discordRoleService.addRoleToMember(
-      discord_id,
-      process.env.DISCORD_PAID_ROLE_ID,
-      reason
-    );
-
+    // RoleBot handles role assignment via webhooks - backend just logs the override
     // Find user and log
     const userResult = await query(
       'SELECT * FROM users WHERE discord_id = $1',
@@ -145,12 +139,7 @@ router.post('/roles/remove', asyncHandler(async (req, res) => {
   }
 
   try {
-    await discordRoleService.removeRoleFromMember(
-      discord_id,
-      process.env.DISCORD_PAID_ROLE_ID,
-      reason
-    );
-
+    // RoleBot handles role removal via webhooks - backend just logs the override
     // Find user and log
     const userResult = await query(
       'SELECT * FROM users WHERE discord_id = $1',
@@ -208,21 +197,19 @@ router.post('/reconcile', asyncHandler(async (req, res) => {
 
     const hasPaidSubscription = subResult.rows.length > 0;
 
-    // Sync roles
-    const changes = await discordRoleService.syncRoles(discord_id, hasPaidSubscription);
-
-    // Log
+    // RoleBot will handle role syncing via webhook - backend just logs the reconciliation
+    // Log the reconciliation
     await auditLogService.logEvent(
       user.id,
       'admin.reconcile',
-      { changes, hasPaidSubscription },
+      { hasPaidSubscription },
       { action: 'reconcile', resourceType: 'user' }
     );
 
     res.json({
       success: true,
-      changes,
       hasPaidSubscription,
+      message: 'Reconciliation logged. RoleBot will sync roles via webhook.'
     });
   } catch (err) {
     logger.error({ err, discord_id }, 'Failed to reconcile');
