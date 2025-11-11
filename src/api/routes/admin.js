@@ -1,6 +1,6 @@
 import express from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requireApiToken } from '../middleware/auth.js';
 import * as auditLogService from '../../services/auditLogService.js';
 import * as gracePeriodService from '../../services/gracePeriodService.js';
 import * as webhookService from '../../services/webhookService.js';
@@ -9,6 +9,130 @@ import { query } from '../../db/connection.js';
 import { ValidationError, NotFoundError } from '../../utils/errors.js';
 
 const router = express.Router();
+
+// POST /api/admin/subscriptions/gift - Grant a gift subscription to a user
+// Uses API token auth (not JWT) for rolebot integration
+router.post('/subscriptions/gift', requireApiToken, asyncHandler(async (req, res) => {
+  const { discordId, duration, reason } = req.body;
+
+  // Validate input
+  if (!discordId) {
+    throw new ValidationError('discordId is required');
+  }
+
+  // Parse duration (e.g., "1_month", "3_months", "1_year")
+  const durationMap = {
+    '1_month': 30,
+    '3_months': 90,
+    '6_months': 180,
+    '1_year': 365,
+  };
+
+  const days = durationMap[duration];
+  if (!days) {
+    throw new ValidationError('Invalid duration. Must be one of: 1_month, 3_months, 6_months, 1_year');
+  }
+
+  try {
+    // Find or create user
+    let userResult = await query(
+      'SELECT * FROM users WHERE discord_id = $1',
+      [discordId]
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
+
+    let userId;
+    if (userResult.rows.length === 0) {
+      // Create new user with minimal info
+      const newUserResult = await query(
+        `INSERT INTO users (discord_id, tier, email, subscription_end_date)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [discordId, 'paid', `gift-${discordId}@triboar.guild`, expiresAt]
+      );
+      userId = newUserResult.rows[0].id;
+    } else {
+      userId = userResult.rows[0].id;
+      // Update existing user to paid tier with expiration date
+      await query(
+        'UPDATE users SET tier = $1, subscription_end_date = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+        ['paid', expiresAt, userId]
+      );
+    }
+
+    // Create admin override record
+    await query(
+      `INSERT INTO admin_overrides
+       (user_id, admin_discord_id, override_type, reason, expires_at, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        userId,
+        req.user?.discord_id || null,
+        'tier_change',
+        reason || `Gift subscription: ${duration}`,
+        expiresAt,
+        JSON.stringify({
+          originalTier: userResult.rows[0]?.tier || 'free',
+          newTier: 'paid',
+          duration,
+          days,
+          giftedBy: req.user?.email || 'admin'
+        })
+      ]
+    );
+
+    // Remove from grace period if they're in one
+    try {
+      await gracePeriodService.removeFromGracePeriod(userId, discordId);
+    } catch (err) {
+      // Ignore if not in grace period
+      logger.debug({ userId, discordId }, 'User not in grace period (expected for new gifts)');
+    }
+
+    // Log audit event
+    await auditLogService.logEvent(
+      userId,
+      'gift_subscription.granted',
+      {
+        discordId,
+        duration,
+        days,
+        expiresAt,
+        reason: reason || 'Gift subscription'
+      },
+      {
+        action: 'grant',
+        resourceType: 'subscription'
+      }
+    );
+
+    // Trigger webhook to notify rolebot
+    await webhookService.sendWebhook('subscription.activated', {
+      discordId,
+      source: 'gift_subscription',
+      expiresAt: expiresAt.toISOString()
+    });
+
+    logger.info({ discordId, userId, duration, expiresAt }, 'Gift subscription granted');
+
+    res.json({
+      success: true,
+      message: `Gift subscription granted for ${duration}`,
+      user: {
+        id: userId,
+        discordId,
+        tier: 'paid',
+        expiresAt
+      }
+    });
+
+  } catch (err) {
+    logger.error({ err, discordId, duration }, 'Failed to grant gift subscription');
+    throw err;
+  }
+}));
 
 // All admin routes require authentication
 router.use(requireAdmin);
@@ -213,129 +337,6 @@ router.post('/reconcile', asyncHandler(async (req, res) => {
     });
   } catch (err) {
     logger.error({ err, discord_id }, 'Failed to reconcile');
-    throw err;
-  }
-}));
-
-// POST /api/admin/subscriptions/gift - Grant a gift subscription to a user
-router.post('/subscriptions/gift', asyncHandler(async (req, res) => {
-  const { discordId, duration, reason } = req.body;
-
-  // Validate input
-  if (!discordId) {
-    throw new ValidationError('discordId is required');
-  }
-
-  // Parse duration (e.g., "1_month", "3_months", "1_year")
-  const durationMap = {
-    '1_month': 30,
-    '3_months': 90,
-    '6_months': 180,
-    '1_year': 365,
-  };
-
-  const days = durationMap[duration];
-  if (!days) {
-    throw new ValidationError('Invalid duration. Must be one of: 1_month, 3_months, 6_months, 1_year');
-  }
-
-  try {
-    // Find or create user
-    let userResult = await query(
-      'SELECT * FROM users WHERE discord_id = $1',
-      [discordId]
-    );
-
-    let userId;
-    if (userResult.rows.length === 0) {
-      // Create new user with minimal info
-      const newUserResult = await query(
-        `INSERT INTO users (discord_id, tier, email)
-         VALUES ($1, $2, $3)
-         RETURNING *`,
-        [discordId, 'paid', `gift-${discordId}@triboar.guild`]
-      );
-      userId = newUserResult.rows[0].id;
-    } else {
-      userId = userResult.rows[0].id;
-      // Update existing user to paid tier
-      await query(
-        'UPDATE users SET tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['paid', userId]
-      );
-    }
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + days);
-
-    // Create admin override record
-    await query(
-      `INSERT INTO admin_overrides
-       (user_id, admin_discord_id, override_type, reason, expires_at, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        userId,
-        req.user?.discord_id || null,
-        'tier_change',
-        reason || `Gift subscription: ${duration}`,
-        expiresAt,
-        JSON.stringify({
-          originalTier: userResult.rows[0]?.tier || 'free',
-          newTier: 'paid',
-          duration,
-          days,
-          giftedBy: req.user?.email || 'admin'
-        })
-      ]
-    );
-
-    // Remove from grace period if they're in one
-    try {
-      await gracePeriodService.removeFromGracePeriod(userId, discordId);
-    } catch (err) {
-      // Ignore if not in grace period
-      logger.debug({ userId, discordId }, 'User not in grace period (expected for new gifts)');
-    }
-
-    // Log audit event
-    await auditLogService.logEvent(
-      userId,
-      'gift_subscription.granted',
-      {
-        discordId,
-        duration,
-        days,
-        expiresAt,
-        reason: reason || 'Gift subscription'
-      },
-      {
-        action: 'grant',
-        resourceType: 'subscription'
-      }
-    );
-
-    // Trigger webhook to notify rolebot
-    await webhookService.sendWebhook('subscription.activated', {
-      discordId,
-      source: 'gift_subscription',
-      expiresAt: expiresAt.toISOString()
-    });
-
-    logger.info({ discordId, userId, duration, expiresAt }, 'Gift subscription granted');
-
-    res.json({
-      success: true,
-      message: `Gift subscription granted for ${duration}`,
-      user: {
-        id: userId,
-        discordId,
-        tier: 'paid',
-        expiresAt
-      }
-    });
-
-  } catch (err) {
-    logger.error({ err, discordId, duration }, 'Failed to grant gift subscription');
     throw err;
   }
 }));
