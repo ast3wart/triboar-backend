@@ -10,9 +10,9 @@
     "migrate": "node src/db/migrate.js",
     "migrate:undo": "node src/db/migrate.js --undo",
     "seed": "node src/db/seed.js",
-    "test": "NODE_ENV=test jest --detectOpenHandles",
-    "test:e2e": "NODE_ENV=test jest --testPathPattern=e2e",
-    "test:unit": "NODE_ENV=test jest --testPathPattern=unit",
+    "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles",
+    "test:e2e": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=e2e",
+    "test:unit": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=unit",
     "lint": "eslint src/**/*.js"
   },
   "keywords": [

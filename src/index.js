@@ -129,7 +129,9 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start!
-startServer();
+// Start server only if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
 
 export default app;
